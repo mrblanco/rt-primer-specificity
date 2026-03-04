@@ -281,7 +281,10 @@ def plot_3prime_match_distribution(comp_df, random_df, output_dir):
 
 def plot_primer_feature_correlations(summary, features, output_dir):
     """Scatter plots of primer features vs off-target rate."""
-    merged = summary.merge(features, left_on="rt_primer", right_on="probe_name")
+    # Drop columns from summary that also exist in features to avoid suffixed duplicates
+    overlap_cols = set(summary.columns) & set(features.columns) - {"probe_name", "rt_primer"}
+    summary_clean = summary.drop(columns=[c for c in overlap_cols if c in summary.columns])
+    merged = summary_clean.merge(features, left_on="rt_primer", right_on="probe_name")
 
     feature_cols = [
         ("primer_length", "Primer length (bp)"),
@@ -548,7 +551,9 @@ def main():
     # 6. Per-primer off-target rate analysis
     # --------------------------------------------------------
     print("\n6. Per-primer feature analysis...", file=sys.stderr)
-    merged = summary.merge(features, left_on="rt_primer", right_on="probe_name")
+    overlap_cols = set(summary.columns) & set(features.columns) - {"probe_name", "rt_primer"}
+    summary_clean = summary.drop(columns=[c for c in overlap_cols if c in summary.columns])
+    merged = summary_clean.merge(features, left_on="rt_primer", right_on="probe_name")
     offtarget_rate = 1 - merged["on_target_rate"]
 
     report_lines.append(f"\n{'='*70}")

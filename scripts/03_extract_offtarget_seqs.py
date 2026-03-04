@@ -98,16 +98,21 @@ def cluster_positions(positions, max_distance):
 
 def extract_priming_site_seq(genome, chrom, pos, strand, extract_length):
     """
-    Extract the genomic sequence at a priming site.
+    Extract the genomic sequence at a priming site, oriented so that a perfect
+    on-target match aligns directly with the primer Seq (5'→3').
 
-    The read's 5' alignment position marks the 3' end of the primer binding site.
-    The primer binds UPSTREAM of this position (in the direction the RNA was read).
+    The R2 read's 5' alignment position (pos) marks the 3' end of the primer
+    binding site. The primer extends UPSTREAM from pos.
 
-    For a + strand read: primer bound to the - strand of DNA, upstream means
-        extracting sequence to the LEFT of pos on the + strand, then reverse
-        complementing to get the RNA-sense sequence the primer targeted.
-    For a - strand read: primer bound to the + strand of DNA, upstream means
-        extracting sequence to the RIGHT of pos on the + strand.
+    For a + strand R2 read:
+        - cDNA is on + strand, RNA template was - strand-like
+        - Primer Seq matches the + strand genomic DNA at the binding site
+        - Extract + strand seq to the LEFT of pos → compare directly with Seq
+
+    For a - strand R2 read:
+        - cDNA is on - strand, RNA template was + strand-like
+        - Primer Seq matches the - strand genomic DNA at the binding site
+        - Extract + strand seq to the RIGHT of pos → reverse complement → compare with Seq
     """
     try:
         chrom_length = genome.get_reference_length(chrom)
@@ -115,20 +120,18 @@ def extract_priming_site_seq(genome, chrom, pos, strand, extract_length):
         return None
 
     if strand == "+":
-        # Read is on + strand; the primer targeted - strand RNA
-        # Extract genomic sequence to the left of pos (this is where primer bound)
+        # R2 on + strand: primer bound + strand DNA upstream (to the left)
+        # + strand genomic seq here matches Seq directly
         start = max(0, pos - extract_length)
         end = pos
         seq = genome.fetch(chrom, start, end).upper()
-        # The primer sequence is complementary to this, so return the reverse complement
-        # (to get the sequence the primer was designed to match)
-        seq = helpers.reverse_complement(seq)
     else:
-        # Read is on - strand; the primer targeted + strand RNA
-        # Extract genomic sequence to the right of pos
+        # R2 on - strand: primer bound - strand DNA downstream (to the right in + coords)
+        # Extract + strand, then RC to get - strand = what matches Seq
         start = pos
         end = min(chrom_length, pos + extract_length)
         seq = genome.fetch(chrom, start, end).upper()
+        seq = helpers.reverse_complement(seq)
 
     return seq
 

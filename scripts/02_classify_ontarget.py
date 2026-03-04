@@ -119,6 +119,15 @@ def main():
     reads = pd.read_csv(args.reads, sep="\t")
     print(f"  Loaded {len(reads):,} reads", file=sys.stderr)
 
+    # Filter to R2 only — R2 is where the RT primer was trimmed, so its
+    # alignment position marks the actual priming site. R1 is at the other
+    # end of the cDNA fragment and would give wrong priming site locations.
+    if "is_read2" in reads.columns:
+        n_before = len(reads)
+        reads = reads[reads["is_read2"] == 1].copy()
+        print(f"  Filtered to R2 only: {len(reads):,} reads "
+              f"(dropped {n_before - len(reads):,} R1 reads)", file=sys.stderr)
+
     # Classify each read
     print("Classifying reads...", file=sys.stderr)
     results = reads["rt_primer"].map(lambda x: x in targets_dict)

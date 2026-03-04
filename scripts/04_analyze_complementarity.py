@@ -44,6 +44,11 @@ def parse_args():
         "--output", required=True,
         help="Path to output complementarity_analysis.tsv.gz.",
     )
+    parser.add_argument(
+        "--exclude-bed",
+        help="BED file of regions to exclude (e.g., rRNA loci). "
+             "Any off-target site overlapping these regions is filtered out.",
+    )
     return parser.parse_args()
 
 
@@ -199,6 +204,36 @@ def analyze_site(primer_seq, site_seq):
     }
 
 
+def load_exclude_regions(bed_path):
+    """Load a BED file of regions to exclude. Returns dict of chrom -> list of (start, end)."""
+    regions = {}
+    with open(bed_path) as f:
+        for line in f:
+            if line.startswith("#") or line.strip() == "":
+                continue
+            parts = line.strip().split("\t")
+            chrom = parts[0]
+            start = int(parts[1])
+            end = int(parts[2])
+            regions.setdefault(chrom, []).append((start, end))
+    # Sort intervals for each chromosome
+    for chrom in regions:
+        regions[chrom].sort()
+    return regions
+
+
+def site_in_excluded_region(chrom, pos, exclude_regions):
+    """Check if a position falls within any excluded region."""
+    if chrom not in exclude_regions:
+        return False
+    for start, end in exclude_regions[chrom]:
+        if start <= pos < end:
+            return True
+        if pos < start:
+            break  # sorted, no need to check further
+    return False
+
+
 def main():
     args = parse_args()
 
@@ -209,6 +244,19 @@ def main():
     print("Loading off-target sites...", file=sys.stderr)
     sites = pd.read_csv(args.sites, sep="\t")
     print(f"  Loaded {len(sites):,} off-target priming sites", file=sys.stderr)
+
+    # Filter out excluded regions (e.g., rRNA loci)
+    if args.exclude_bed:
+        exclude_regions = load_exclude_regions(args.exclude_bed)
+        n_before = len(sites)
+        mask = sites.apply(
+            lambda row: not site_in_excluded_region(row["chrom"], row["site_pos"], exclude_regions),
+            axis=1,
+        )
+        sites = sites[mask].copy()
+        n_excluded = n_before - len(sites)
+        print(f"  Excluded {n_excluded:,} sites in BED regions, "
+              f"{len(sites):,} remaining", file=sys.stderr)
 
     # Analyze complementarity for each site
     print("Analyzing complementarity...", file=sys.stderr)
